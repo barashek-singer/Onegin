@@ -13,6 +13,7 @@ const size_t MAX_SYMBOLS_COUNT = 50;
 const char* INPUT_TEXT_FILE = "beautiful_text.txt";
 const char* OUTPUT_TEXT_FILE = "mytexts.txt";
 
+int PrintTextToFile(const TextLine* text_lines, size_t nstrings, const char* name_file, const char* access_mode);
 int InputTextFromFile(char text[MAX_STRINGS_COUNT][MAX_SYMBOLS_COUNT], const char* name_file);
 int StrBackCmp(const void* ptr_str1, const void* ptr_str2);
 int StrReverseCmp(const void* ptr_str1, const void* ptr_str2);
@@ -30,7 +31,7 @@ int main(){ //после ебаной стирки у меня заработал код, очень многи варнингов и 
     int nstrings = InputTextFromFile(text, INPUT_TEXT_FILE);
 
     if (nstrings < 0){
-        perror("Ну чота с файлом");
+        perror("Ну чота с входным файлом");
         return 0;
     }
 
@@ -44,22 +45,49 @@ int main(){ //после ебаной стирки у меня заработал код, очень многи варнингов и 
 
     QuickSort(text_lines, sizeof(text_lines[0]), 0, nstrings - 1, &StrForwardCmp);
 
-    // PrintTextToFile(text_lines, nstrings, OUTPUT_TEXT_FILE);
+    if (PrintTextToFile(text_lines, nstrings, OUTPUT_TEXT_FILE, "w") < 0){
+        perror("Ну чота с выходным файлом");
+    }
     PrintStringArray(text_lines, nstrings);
 
     printf("----------------------------------\n");
 
     qsort(text_lines, nstrings, sizeof(text_lines[0]), &StrReverseCmp);
 
-    // PrintTextToFile(text_lines, nstrings, OUTPUT_TEXT_FILE);
+    if (PrintTextToFile(text_lines, nstrings, OUTPUT_TEXT_FILE, "a") < 0){
+        perror("Ну чота с выходным файлом");
+    }
     PrintStringArray(text_lines, nstrings);
 
     printf("----------------------------------\n");
 
     BubbleSort(text_lines, nstrings, sizeof(text_lines[0]), &StrBackCmp);
 
-    // PrintTextToFile(text_lines, nstrings, OUTPUT_TEXT_FILE);
+    if (PrintTextToFile(text_lines, nstrings, OUTPUT_TEXT_FILE, "a") < 0){
+        perror("Ну чота с выходным файлом");
+    }
     PrintStringArray(text_lines, nstrings);
+}
+
+int PrintTextToFile(const TextLine* text_lines, size_t nstrings, const char* name_file, const char* access_mode){
+    assert(text_lines && name_file);
+
+    FILE* fp = fopen(name_file, access_mode);
+
+    if (fp == NULL)
+        return -1;
+
+    fprintf(fp, "-----------------------------\n");
+
+    for (size_t i = 0; i < nstrings; i++)
+        fprintf(fp, "%s", text_lines[i].start);
+
+    fprintf(fp, "-----------------------------");
+
+    if (fclose(fp) == EOF)
+        return -2;
+
+    return 0;
 }
 
 int InputTextFromFile(char text[MAX_STRINGS_COUNT][MAX_SYMBOLS_COUNT], const char* name_file){
@@ -240,7 +268,3 @@ void PrintStringArray(const TextLine* text_lines, size_t size){
     for (size_t i = 0; i < size; i++)
         printf("[%zu]=%s", i, text_lines[i].start);
 }
-
-/*
-
-*/
