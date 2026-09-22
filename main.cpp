@@ -15,8 +15,6 @@ struct Text{
     TextLine* lines;
 };
 
-// const size_t MAX_STRINGS_COUNT = 7000;
-// const size_t MAX_SYMBOLS_COUNT = 100;
 const char* INPUT_TEXT_FILE = "beautiful_text.txt";
 const char* OUTPUT_TEXT_FILE = "mytexts.txt";
 
@@ -43,12 +41,12 @@ int main(){
     if (SplitText(&text))
         return 0;
 
-    QuickSort(text.lines, sizeof(TextLine), 0, text.lines_count - 1, &StrForwardCmp);
+    qsort(text.lines, text.lines_count, sizeof(TextLine), &StrForwardCmp);
 
     if (PrintTextToFile(&text, OUTPUT_TEXT_FILE, "w"))
         return 0;
 
-    qsort(text.lines, text.lines_count, sizeof(TextLine), &StrReverseCmp);
+    QuickSort(text.lines, sizeof(TextLine), 0, text.lines_count - 1, &StrReverseCmp);
 
     if (PrintTextToFile(&text, OUTPUT_TEXT_FILE, "a"))
         return 0;
@@ -78,6 +76,9 @@ int SplitText(Text* text){
             ++text->lines_count;
             *(text->buf + cur_ch) = '\0';
         }
+
+        if (*(text->buf + cur_ch) == '\r')
+            *(text->buf + cur_ch) = '\0';
     }
 
     text->lines = (TextLine*)calloc(text->lines_count, sizeof(TextLine));
@@ -94,7 +95,7 @@ int SplitText(Text* text){
             ++cur_ch;
 
         text->lines[i].end = text->buf + cur_ch;
-        ++cur_ch;
+        cur_ch += 2; //\r\n - 2 ñèìâîëà
     }
 
     return 0;
@@ -130,7 +131,7 @@ int PrintTextToFile(const Text* text, const char* name_file, const char* access_
 int DuplicateTextFromFile(Text* text, const char* name_file){ //
     assert(text && name_file);
 
-    FILE* fp = fopen(name_file, "r");
+    FILE* fp = fopen(name_file, "rb");
     if (fp == NULL){
         perror("Ïğîáëåìà ïğè îòêğûòèè ôàéëà");
         return -1;
@@ -140,7 +141,8 @@ int DuplicateTextFromFile(Text* text, const char* name_file){ //
     text->size = ftell(fp);
     fseek(fp, 0, SEEK_SET);
 
-    text->buf = (char*)calloc(text->size, sizeof(char));
+    text->buf = (char*)calloc(text->size + 1, sizeof(char));
+
     if (text->buf == NULL){
         if (fclose(fp) == EOF){
             perror("Ïğîáëåìà ñ çàêğûòèåì ôàéëà");
@@ -184,8 +186,8 @@ int StrReverseCmp(const void* ptr_text_line1, const void* ptr_text_line2){
         while (str2 >= ptr_str2 && !isalpha(*str2))
             --str2;
 
-        if (str1 >= ptr_str1 && str2 >= ptr_str2 && *str1 != *str2)
-            return *str1 - *str2;
+        if (str1 >= ptr_str1 && str2 >= ptr_str2 && tolower(*str1) != tolower(*str2))
+            return tolower(*str1) - tolower(*str2);
 
         if (str1 >= ptr_str1 && str2 >= ptr_str2){
             --str1;
@@ -194,10 +196,10 @@ int StrReverseCmp(const void* ptr_text_line1, const void* ptr_text_line2){
     }
 
     if (str2 >= ptr_str2)
-        return *str2;
+        return -*str2;
 
     if (str1 >= ptr_str1)
-        return -*str1;
+        return *str1;
 
     return 0;
 }
