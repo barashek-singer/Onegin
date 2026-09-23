@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <sys\stat.h>
 
 struct TextLine{
     char *start, *end;
@@ -15,6 +16,8 @@ struct Text{
     TextLine* lines;
 };
 
+typedef char Byte;
+
 const char* INPUT_TEXT_FILE = "beautiful_text.txt";
 const char* OUTPUT_TEXT_FILE = "mytexts.txt";
 
@@ -22,7 +25,7 @@ void FreeText(Text* text);
 int SplitText(Text* text);
 int PrintTextToFile(const Text* text, const char* name_file, const char* access_mode);
 int DuplicateTextFromFile(Text* text, const char* name_file);
-int StrBackCmp(const void* ptr_str1, const void* ptr_str2);
+int PtrCmp(const void* ptr_str1, const void* ptr_str2);
 int StrReverseCmp(const void* ptr_str1, const void* ptr_str2);
 int StrForwardCmp(const void* str1, const void* str2);
 void* GetPtr(const void* data, size_t size_el, size_t ind);
@@ -30,38 +33,37 @@ void Swap(void* a, void* b, size_t size_el);
 size_t Partition(void* data, size_t size_el, size_t left, size_t right, int (*CompFunc)(const void*, const void*));
 void QuickSort(void* data, size_t size_el, size_t left, size_t right, int (*CompFunc)(const void*, const void*));
 void BubbleSort(void* data, size_t size_arr, size_t size_el, int (*CompFunc)(const void* a, const void* b));
-void PrintStringArray(const TextLine* text_lines, size_t size);
 
 int main(){
     Text text = {0};
 
     if (DuplicateTextFromFile(&text, INPUT_TEXT_FILE))
-        return 0;
+        return 1;
 
     if (SplitText(&text))
-        return 0;
+        return 1;
 
-    qsort(text.lines, text.lines_count, sizeof(TextLine), &StrForwardCmp);
+    QuickSort(text.lines, sizeof(TextLine), 0, text.lines_count - 1, &StrForwardCmp);
 
     if (PrintTextToFile(&text, OUTPUT_TEXT_FILE, "w"))
-        return 0;
+        return 1;
 
-    QuickSort(text.lines, sizeof(TextLine), 0, text.lines_count - 1, &StrReverseCmp);
-
-    if (PrintTextToFile(&text, OUTPUT_TEXT_FILE, "a"))
-        return 0;
-
-    BubbleSort(text.lines, text.lines_count, sizeof(TextLine), &StrBackCmp);
+    qsort(text.lines, text.lines_count, sizeof(TextLine), &StrReverseCmp);
 
     if (PrintTextToFile(&text, OUTPUT_TEXT_FILE, "a"))
-        return 0;
+        return 1;
+
+    BubbleSort(text.lines, text.lines_count, sizeof(TextLine), &PtrCmp);
+
+    if (PrintTextToFile(&text, OUTPUT_TEXT_FILE, "a"))
+        return 1;
 
     FreeText(&text);
 
     return 0;
 }
 
-void FreeText(Text* text){ //
+void FreeText(Text* text){
     assert(text);
 
     free(text->lines);
@@ -76,9 +78,6 @@ int SplitText(Text* text){
             ++text->lines_count;
             *(text->buf + cur_ch) = '\0';
         }
-
-        if (*(text->buf + cur_ch) == '\r')
-            *(text->buf + cur_ch) = '\0';
     }
 
     text->lines = (TextLine*)calloc(text->lines_count, sizeof(TextLine));
@@ -95,7 +94,7 @@ int SplitText(Text* text){
             ++cur_ch;
 
         text->lines[i].end = text->buf + cur_ch;
-        cur_ch += 2; //\r\n - 2 символа
+        cur_ch++;
     }
 
     return 0;
@@ -113,8 +112,6 @@ int PrintTextToFile(const Text* text, const char* name_file, const char* access_
 
     fprintf(fp, "-----------------------------\n");
 
-    // printf()
-
     for (size_t i = 0; i < text->lines_count; i++)
         fprintf(fp, "%s\n", text->lines[i].start);
 
@@ -129,20 +126,25 @@ int PrintTextToFile(const Text* text, const char* name_file, const char* access_
 }
 
 int DuplicateTextFromFile(Text* text, const char* name_file){ //
-    assert(text && name_file);
+    assert(text);
+    assert(name_file);
 
-    FILE* fp = fopen(name_file, "rb");
+    FILE* fp = fopen(name_file, "r");
     if (fp == NULL){
         perror("Проблема при открытии файла");
         return -1;
     }
 
-    fseek(fp, 0, SEEK_END);
-    text->size = ftell(fp);
-    fseek(fp, 0, SEEK_SET);
+    struct stat buf = {0};
+    int status = stat(name_file, &buf);
+    assert(status != -1);
+    text->size = buf.st_size;
 
-    text->buf = (char*)calloc(text->size + 1, sizeof(char));
+    // fseek(fp, 0, SEEK_END); // fstat stat
+    // text->size = ftell(fp); //read fread
+    // fseek(fp, 0, SEEK_SET);
 
+    text->buf = (char*)calloc(text->size, sizeof(char));
     if (text->buf == NULL){
         if (fclose(fp) == EOF){
             perror("Проблема с закрытием файла");
@@ -153,12 +155,12 @@ int DuplicateTextFromFile(Text* text, const char* name_file){ //
         return -3;
     }
 
-    fread(text->buf, 1, text->size, fp);
+    text->size = fread(text->buf, sizeof(char), text->size, fp);
 
     return 0;
 }
 
-int StrBackCmp(const void* ptr_str1, const void* ptr_str2){
+int PtrCmp(const void* ptr_str1, const void* ptr_str2){
     assert(ptr_str1 && ptr_str2);
 
     if (size_t(((const TextLine*)ptr_str1)->start) < size_t(((const TextLine*)ptr_str2)->start))
@@ -171,7 +173,8 @@ int StrBackCmp(const void* ptr_str1, const void* ptr_str2){
 }
 
 int StrReverseCmp(const void* ptr_text_line1, const void* ptr_text_line2){
-    assert(ptr_text_line1 && ptr_text_line2);
+    assert(ptr_text_line1);
+    assert(ptr_text_line2);
 
     const char* const ptr_str1 = ((const TextLine*)ptr_text_line1)->start;
     const char* const ptr_str2 = ((const TextLine*)ptr_text_line2)->start;
@@ -196,21 +199,23 @@ int StrReverseCmp(const void* ptr_text_line1, const void* ptr_text_line2){
     }
 
     if (str2 >= ptr_str2)
-        return -*str2;
+        return -1;
 
     if (str1 >= ptr_str1)
-        return *str1;
+        return 1;
 
     return 0;
 }
 
 int StrForwardCmp(const void* ptr_text_line1, const void* ptr_text_line2){
-    assert(ptr_text_line1 && ptr_text_line2);
+    assert(ptr_text_line1);
+    assert(ptr_text_line2);
 
     const char* str1 = ((const TextLine*)ptr_text_line1)->start;
     const char* str2 = ((const TextLine*)ptr_text_line2)->start;
 
     while (*str1 != '\0' && *str2 != '\0'){
+
         while (!isalpha(*str1) && *str1 != '\0')
             ++str1;
 
@@ -226,7 +231,7 @@ int StrForwardCmp(const void* ptr_text_line1, const void* ptr_text_line2){
         }
     }
 
-    return 0;
+    return *str1 - *str2;
 }
 
 void* GetPtr(const void* data, size_t size_el, size_t ind){
@@ -236,12 +241,13 @@ void* GetPtr(const void* data, size_t size_el, size_t ind){
 }
 
 void Swap(void* a, void* b, size_t size_el){
-    assert(a && b);
+    assert(a);
+    assert(b);
 
-    char* ptr_a = (char*)a;
-    char* ptr_b = (char*)b;
+    Byte* ptr_a = (Byte*)a;
+    Byte* ptr_b = (Byte*)b;
 
-    char temp = '\0';
+    Byte temp = '\0';
 
     for (size_t i = 0; i < size_el; ++i) {
         temp = *(ptr_a + i);
@@ -251,52 +257,57 @@ void Swap(void* a, void* b, size_t size_el){
 }
 
 size_t Partition(void* data, size_t size_el, size_t left, size_t right, int (*CompFunc)(const void*, const void*)){
-    assert(data && CompFunc && left <= right);
+    assert(left <= right);
+    assert(CompFunc);
+    assert(data);
+
     size_t i_pivot = left + (right - left) / 2;
 
-    size_t i = left;
-    size_t j = right;
+    size_t left_pos = left;
+    size_t right_pos = right;
 
     while (true) {
-        while (CompFunc(GetPtr(data, size_el, i), GetPtr(data, size_el, i_pivot)) < 0) ++i;
-        while (CompFunc(GetPtr(data, size_el, j), GetPtr(data, size_el, i_pivot)) > 0) --j;
+        while (CompFunc(GetPtr(data, size_el, left_pos), GetPtr(data, size_el, i_pivot)) < 0) ++left_pos;
+        while (CompFunc(GetPtr(data, size_el, right_pos), GetPtr(data, size_el, i_pivot)) > 0) --right_pos;
 
-        assert(left <= i && i <= right && left <= j && j <= right);
+        assert(left <= left_pos && left_pos <= right && left <= right_pos && right_pos <= right);
 
-        if (i >= j)
-            return j;
+        if (left_pos >= right_pos)
+            return right_pos;
 
-        Swap(GetPtr(data, size_el, i), GetPtr(data, size_el, j), size_el);
+        Swap(GetPtr(data, size_el, left_pos), GetPtr(data, size_el, right_pos), size_el);
 
-        if (i_pivot == i)
-            i_pivot = j;
+        if (i_pivot == left_pos)
+            i_pivot = right_pos;
 
-        else if (i_pivot == j)
-            i_pivot = i;
+        else if (i_pivot == right_pos)
+            i_pivot = left_pos;
 
-        ++i;
-        --j;
+        ++left_pos;
+        --right_pos;
     }
 }
 
 void QuickSort(void* data, size_t size_el, size_t left, size_t right, int (*CompFunc)(const void*, const void*)){
-    assert(data && CompFunc);
+    assert(data);
+    assert(CompFunc);
 
-    if (right == left)
+    if (right <= left)
         return;
 
-    size_t p = Partition(data, size_el, left, right, CompFunc);
+    size_t middle = Partition(data, size_el, left, right, CompFunc);
 
-    QuickSort(data, size_el, left, p, CompFunc);
-    QuickSort(data, size_el, p + 1, right, CompFunc);
+    QuickSort(data, size_el, left, middle, CompFunc);
+    QuickSort(data, size_el, middle + 1, right, CompFunc);
 }
 
 void BubbleSort(void* data, size_t size_arr, size_t size_el, int (*CompFunc)(const void* a, const void* b)){
-    assert(data && CompFunc);
+    assert(data);
+    assert(CompFunc);
 
     bool sorted = false;
 
-    do {
+    while (!sorted) {
         sorted = true;
 
         for (size_t i = 0; i < size_arr - 1; i++){
@@ -308,12 +319,5 @@ void BubbleSort(void* data, size_t size_arr, size_t size_el, int (*CompFunc)(con
                 Swap(first, second, size_el);
             }
         }
-    } while (!sorted);
-}
-
-void PrintStringArray(const TextLine* text_lines, size_t size){
-    assert(text_lines);
-
-    for (size_t i = 0; i < size; i++)
-        printf("[%zu]=%s", i, text_lines[i].start);
+    }
 }
