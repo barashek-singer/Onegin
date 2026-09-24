@@ -129,16 +129,16 @@ int DuplicateTextFromFile(Text* text, const char* name_file){ //
     assert(text);
     assert(name_file);
 
+    struct stat buf = {0};
+    int status = stat(name_file, &buf);
+    assert(status != -1);
+    text->size = buf.st_size;
+
     FILE* fp = fopen(name_file, "r");
     if (fp == NULL){
         perror("Проблема при открытии файла");
         return -1;
     }
-
-    struct stat buf = {0};
-    int status = stat(name_file, &buf);
-    assert(status != -1);
-    text->size = buf.st_size;
 
     // fseek(fp, 0, SEEK_END); // fstat stat
     // text->size = ftell(fp); //read fread
