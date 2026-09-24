@@ -6,14 +6,16 @@
 #include <sys\stat.h>
 
 struct TextLine{
+    //    vvvvv - указатель на начало строки
     char *start, *end;
+    //            ^^^ - указатель на конец строки
 };
 
 struct Text{
-    char* buf;
-    size_t size;
-    size_t lines_count;
-    TextLine* lines;
+    char* buf; //буфер, в котором хранится содержимое файла (текст)
+    size_t size; //размер текста в байтах
+    size_t lines_count; //количество строк в тексте
+    TextLine* lines; //массив строк
 };
 
 typedef char Byte;
@@ -21,44 +23,83 @@ typedef char Byte;
 const char* INPUT_TEXT_FILE = "beautiful_text.txt";
 const char* OUTPUT_TEXT_FILE = "mytexts.txt";
 
+
+////-----Функции для работы с файлами-------
+
 void FreeText(Text* text);
+// Освобождает всю динамическую память, используемую в Text
+
 int SplitText(Text* text);
-int PrintTextToFile(const Text* text, const char* name_file, const char* access_mode);
-int DuplicateTextFromFile(Text* text, const char* name_file);
-int PtrCmp(const void* ptr_str1, const void* ptr_str2);
-int StrReverseCmp(const void* ptr_str1, const void* ptr_str2);
-int StrForwardCmp(const void* str1, const void* str2);
+// Делит текст на строки
+
+void PrintTextToFile(const Text* text, FILE* fp);
+// Печатает текст в файл
+
+int LoadTextFromFile(Text* text, const char* name_file);
+// Считывает текст и переносит его в структуру Text
+
+////-----Функции для работы с указателями----
+
 void* GetPtr(const void* data, size_t size_el, size_t ind);
+// Возвращает указатель на data[ind]
+
 void Swap(void* a, void* b, size_t size_el);
+// Меняет местами a и b
+
+////----------Компараторы для строк----------
+
+int StrForwardCmp(const void* str1, const void* str2);
+// Компаратор для сортировки строк в лексикографическом порядке
+
+int StrReverseCmp(const void* ptr_str1, const void* ptr_str2);
+// Компаратор для сортировки строк в обратном лексикографическом порядке
+//                                 (сравнение начинается с конца строки)
+
+int PtrCmp(const void* ptr_str1, const void* ptr_str2);
+// Компаратор для восстановления текста
+//  (сравниваются указатели на начало строки)
+
+////--------Функции для сортировок-----------
+
 size_t Partition(void* data, size_t size_el, size_t left, size_t right, int (*CompFunc)(const void*, const void*));
-void QuickSort(void* data, size_t size_el, size_t left, size_t right, int (*CompFunc)(const void*, const void*));
+// Разделяет массив на два подмассива некоторым pivot
+// в левом подмассиве значения x <= pivot
+// в правом подмассиве значения y >= pivot
+// Возвращает индекс на последний элемент левого подмассива
+
+void QuickSort(void* data, size_t size, size_t size_el, size_t left, size_t right, int (*CompFunc)(const void*, const void*));
+// Быстрая сортировка
+
 void BubbleSort(void* data, size_t size_arr, size_t size_el, int (*CompFunc)(const void* a, const void* b));
+// Сортировка пузырьком
 
 int main(){
     Text text = {0};
 
-    if (DuplicateTextFromFile(&text, INPUT_TEXT_FILE))
+    if (LoadTextFromFile(&text, INPUT_TEXT_FILE))
         return 1;
 
-    if (SplitText(&text))
+    FILE* fp = fopen(OUTPUT_TEXT_FILE, "w");
+    if (fp == NULL){
+        FreeText(&text);
+        perror("Не удалось открыть файл");
         return 1;
+    }
 
     QuickSort(text.lines, sizeof(TextLine), 0, text.lines_count - 1, &StrForwardCmp);
-
-    if (PrintTextToFile(&text, OUTPUT_TEXT_FILE, "w"))
-        return 1;
+    PrintTextToFile(&text, fp);
 
     qsort(text.lines, text.lines_count, sizeof(TextLine), &StrReverseCmp);
-
-    if (PrintTextToFile(&text, OUTPUT_TEXT_FILE, "a"))
-        return 1;
+    PrintTextToFile(&text, fp);
 
     BubbleSort(text.lines, text.lines_count, sizeof(TextLine), &PtrCmp);
-
-    if (PrintTextToFile(&text, OUTPUT_TEXT_FILE, "a"))
-        return 1;
+    PrintTextToFile(&text, fp);
 
     FreeText(&text);
+    if (fclose(fp) < 0){
+        perror("Неудачное закрытие файла");
+        return 1;
+    }
 
     return 0;
 }
@@ -82,7 +123,7 @@ int SplitText(Text* text){
 
     text->lines = (TextLine*)calloc(text->lines_count, sizeof(TextLine));
     if (text->lines == NULL){
-        printf("Проблемы с динамической памятью");
+        printf("Ну что сказать, иди покупай оперативку нормальную");
         return -3;
     }
 
@@ -94,21 +135,15 @@ int SplitText(Text* text){
             ++cur_ch;
 
         text->lines[i].end = text->buf + cur_ch;
-        cur_ch++;
+        ++cur_ch;
     }
 
     return 0;
 }
 
-int PrintTextToFile(const Text* text, const char* name_file, const char* access_mode){
-    assert(text && name_file && access_mode);
-
-    FILE* fp = fopen(name_file, access_mode);
-
-    if (fp == NULL){
-        perror("Проблема с открытием файла");
-        return -1;
-    }
+void PrintTextToFile(const Text* text, FILE* fp){
+    assert(text);
+    assert(fp);
 
     fprintf(fp, "-----------------------------\n");
 
@@ -116,16 +151,9 @@ int PrintTextToFile(const Text* text, const char* name_file, const char* access_
         fprintf(fp, "%s\n", text->lines[i].start);
 
     fprintf(fp, "-----------------------------\n");
-
-    if (fclose(fp) == EOF){
-        perror("Проблема с закрытием файла");
-        return -2;
-    }
-
-    return 0;
 }
 
-int DuplicateTextFromFile(Text* text, const char* name_file){ //
+int LoadTextFromFile(Text* text, const char* name_file){ //
     assert(text);
     assert(name_file);
 
@@ -134,28 +162,25 @@ int DuplicateTextFromFile(Text* text, const char* name_file){ //
     assert(status != -1);
     text->size = buf.st_size;
 
+    text->buf = (char*)calloc(text->size + 1, sizeof(char));
+    if (text->buf == NULL){
+        printf("Ну что сказать, иди покупай оперативку нормальную");
+        return -3;
+    }
+
     FILE* fp = fopen(name_file, "r");
     if (fp == NULL){
+        free(text->buf);
         perror("Проблема при открытии файла");
         return -1;
     }
 
-    // fseek(fp, 0, SEEK_END); // fstat stat
-    // text->size = ftell(fp); //read fread
-    // fseek(fp, 0, SEEK_SET);
+    text->size = fread(text->buf, sizeof(char), text->size, fp) + 1;
 
-    text->buf = (char*)calloc(text->size, sizeof(char));
-    if (text->buf == NULL){
-        if (fclose(fp) == EOF){
-            perror("Проблема с закрытием файла");
-            return -2;
-        }
-
-        printf("Проблемы с динамической памятью");
+    if (SplitText(text)){
+        free(text->buf);
         return -3;
     }
-
-    text->size = fread(text->buf, sizeof(char), text->size, fp);
 
     return 0;
 }
@@ -261,13 +286,13 @@ size_t Partition(void* data, size_t size_el, size_t left, size_t right, int (*Co
     assert(CompFunc);
     assert(data);
 
-    size_t i_pivot = left + (right - left) / 2;
+    size_t i_pivot = (left + right) / 2;
 
     size_t left_pos = left;
     size_t right_pos = right;
 
     while (true) {
-        while (CompFunc(GetPtr(data, size_el, left_pos), GetPtr(data, size_el, i_pivot)) < 0) ++left_pos;
+        while (CompFunc(GetPtr(data, size_el,  left_pos), GetPtr(data, size_el, i_pivot)) < 0) ++left_pos;
         while (CompFunc(GetPtr(data, size_el, right_pos), GetPtr(data, size_el, i_pivot)) > 0) --right_pos;
 
         assert(left <= left_pos && left_pos <= right && left <= right_pos && right_pos <= right);
